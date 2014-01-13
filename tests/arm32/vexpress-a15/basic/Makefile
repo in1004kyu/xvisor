@@ -43,8 +43,8 @@ board_secure_extn = y
 board_smp	  = y
 
 board_cppflags   =
-board_cflags     = -mcpu=cortex-a15
-board_asflags    = -mcpu=cortex-a15
+#board_cflags     = -mcpu=cortex-a15
+#board_asflags    = -mcpu=cortex-a15
 board_ldflags    =
 
 # Include common makefile for basic firmware

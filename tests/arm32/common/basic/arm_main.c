@@ -448,6 +448,118 @@ void arm_cmd_start_linux(int argc, char **argv)
 	return;
 }
 
+
+void arm_cmd_run_linux(int argc, char **argv)
+{
+	char cfg_str[256];
+	u32 * kernel_args = (u32 *)(arm_board_ram_start() + 0x1000);
+	u32 cmdline_size, p;
+#if 0
+	u32 kernel_addr, initrd_addr, initrd_size;
+#else
+	u32 kernel_addr;
+#endif
+	u8 *dest, *src;
+	u32 i, count;
+
+	arm_puts ("run_linux: \n");
+
+	dest = (u8 *)0x80008000;
+	src = (u8 *)0x00100000;
+	count = 0x4F8000;
+	arm_timer_disable();
+	for (i = 0; i < count; i++) {
+		dest[i] = src[i];
+	}
+	arm_timer_enable();
+
+#if 0
+	dest = (u8 *)0x80500000;
+	src = (u8 *)0x00600000;
+	count = 0x003000;
+	arm_timer_disable();
+	for (i = 0; i < count; i++) {
+		dest[i] = src[i];
+	}
+	arm_timer_enable();
+
+	dest = (u8 *)0x80600000;
+	src = (u8 *)0x00700000;
+	count = 0x600000;
+	arm_timer_disable();
+	for (i = 0; i < count; i++) {
+		dest[i] = src[i];
+	}
+	arm_timer_enable();
+#endif
+
+	/* Parse the arguments from command line */
+	kernel_addr = 0x80008000;
+#if 0
+	initrd_addr = 0x80600000;
+	initrd_size = 0x600000;
+#endif
+
+	/* Setup kernel args */
+	for (p = 0; p < 128; p++) {
+		kernel_args[p] = 0x0;
+	}
+	p = 0;
+	/* ATAG_CORE */
+	kernel_args[p++] = 5;
+	kernel_args[p++] = 0x54410001;
+	kernel_args[p++] = 1;
+	kernel_args[p++] = 0x1000;
+	kernel_args[p++] = 0;
+	/* ATAG_MEM */
+	kernel_args[p++] = 4;
+	kernel_args[p++] = 0x54410002;
+	kernel_args[p++] = memory_size;
+	kernel_args[p++] = arm_board_ram_start();
+#if 0
+	/* ATAG_INITRD2 */
+	kernel_args[p++] = 4;
+	kernel_args[p++] = 0x54420005;
+	kernel_args[p++] = initrd_addr;
+	kernel_args[p++] = initrd_size;
+#endif
+
+	/* Pass memory size via kernel command line */
+	arm_sprintf(cfg_str, " devtmpfs.mount=0 rdinit=/sbin/init mem=%dM", (memory_size >> 20));
+	arm_strcat(cmdline, cfg_str);
+
+	cmdline_size = arm_strlen(cmdline);
+	if (cmdline_size) {
+		/* ATAG_CMDLINE */
+		arm_strcpy((char *)&kernel_args[p + 2], cmdline);
+		cmdline_size = (cmdline_size >> 2) + 1;
+		kernel_args[p++] = cmdline_size + 2;
+		kernel_args[p++] = 0x54410009;
+		p += cmdline_size;
+	}
+
+	/* ATAG_END */
+	kernel_args[p++] = 0;
+	kernel_args[p++] = 0;
+
+	/* Disable interrupts and timer */
+	arm_timer_disable();
+	arm_irq_disable();
+
+	/* Jump to Linux Kernel
+	 * r0 -> zero
+	 * r1 -> board machine type
+	 * r2 -> kernel args address
+	 */
+	((linux_entry_t)kernel_addr)(0x0, arm_board_linux_machine_type(), (u32)kernel_args, 0);
+
+	/* We should never reach here */
+	while (1);
+
+	return;
+}
+
+
 #ifdef BOARD_FDT_SUPPORT
 void arm_cmd_start_linux_fdt(int argc, char **argv)
 {
@@ -679,6 +791,8 @@ void arm_exec(char *line)
 			arm_cmd_copy(argc, argv);
 		} else if (arm_strcmp(argv[0], "start_linux") == 0) {
 			arm_cmd_start_linux(argc, argv);
+		} else if (arm_strcmp(argv[0], "run") == 0) {
+					arm_cmd_run_linux(argc, argv);
 #ifdef BOARD_FDT_SUPPORT
 		} else if (arm_strcmp(argv[0], "start_linux_fdt") == 0) {
 			arm_cmd_start_linux_fdt(argc, argv);
